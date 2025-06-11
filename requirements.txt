@@ -1,3 +1,4 @@
 streamlit
 openrouteservice
 requests
+streamlit-folium
