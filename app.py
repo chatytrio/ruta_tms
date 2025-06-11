@@ -53,11 +53,17 @@ def geocode(direccion):
     else:
         return None, None
 
+# Conversión de horas decimales a texto
+def horas_y_minutos(valor_horas):
+    horas = int(valor_horas)
+    minutos = int(round((valor_horas - horas) * 60))
+    return f"{horas}h {minutos:02d}min"
+
 # Logo y encabezado
 logo = Image.open("logo-virosque2-01.png")
 st.image(logo, width=250)
-st.markdown("<h1 style='color:#8D1B2D;'>TMS</h1>", unsafe_allow_html=True)
-st.markdown("### Planificador de rutas para camiones", unsafe_allow_html=True)
+st.markdown("<h1 style='color:#8D1B2D;'>Virosque TMS</h1>", unsafe_allow_html=True)
+st.markdown("### La excelencia es el camino — planificador de rutas para camiones", unsafe_allow_html=True)
 
 # Entradas del usuario
 col1, col2, col3 = st.columns(3)
@@ -77,8 +83,8 @@ if st.button("🔍 Calcular Ruta"):
 
 # Cálculo principal
 if st.session_state.get("calcular"):
-    coord_origen, label_origen = geocode(origen)
-    coord_destino, label_destino = geocode(destino)
+    coord_origen, _ = geocode(origen)
+    coord_destino, _ = geocode(destino)
 
     stops_list = []
     if stops.strip():
@@ -105,7 +111,7 @@ if st.session_state.get("calcular"):
         st.error(f"❌ Error al calcular la ruta: {e}")
         st.stop()
 
-    # ✅ CORRECCIÓN: sumar todos los segmentos
+    # Cálculo de tiempos y distancias
     segmentos = ruta['features'][0]['properties']['segments']
     distancia_total = sum(seg["distance"] for seg in segmentos)
     duracion_total = sum(seg["duration"] for seg in segmentos)
@@ -114,19 +120,27 @@ if st.session_state.get("calcular"):
     duracion_horas = duracion_total / 3600
     descansos = math.floor(duracion_horas / 4.5)
     tiempo_total_h = duracion_horas + descansos * 0.75
+
+    # Si se excede la jornada de 13h, añadir descanso obligatorio de 11h
+    descanso_diario_h = 11 if tiempo_total_h > 13 else 0
+    tiempo_total_real_h = tiempo_total_h + descanso_diario_h
     hora_salida = datetime.strptime(hora_salida_str, "%H:%M")
-    hora_llegada = hora_salida + timedelta(hours=tiempo_total_h)
+    hora_llegada = hora_salida + timedelta(hours=tiempo_total_real_h)
+
+    # Texto
+    tiempo_conduccion_txt = horas_y_minutos(duracion_horas)
+    tiempo_total_txt = horas_y_minutos(tiempo_total_h)
 
     # Mostrar métricas
     st.markdown("### 📊 Datos de la ruta")
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("🛣 Distancia", f"{distancia_km:.2f} km")
-    col2.metric("🕓 Conducción", f"{duracion_horas:.2f} h")
-    col3.metric("⏱ Total (con descansos)", f"{tiempo_total_h:.2f} h")
+    col2.metric("🕓 Conducción", tiempo_conduccion_txt)
+    col3.metric("⏱ Total (con descansos)", tiempo_total_txt)
     col4.metric("📅 Llegada estimada", hora_llegada.strftime("%H:%M"))
 
     if tiempo_total_h > 13:
-        st.warning("⚠️ Este viaje excede el límite de jornada diaria (13h). Requiere descanso adicional.")
+        st.warning(f"⚠️ El viaje excede la jornada máxima (13h). Se ha añadido un descanso obligatorio de 11h.\n⏳ Tiempo total ajustado: {horas_y_minutos(tiempo_total_real_h)}")
     else:
         st.success("🟢 El viaje puede completarse en una sola jornada de trabajo.")
 
@@ -142,4 +156,5 @@ if st.session_state.get("calcular"):
 
     st.markdown("### 🗺️ Ruta estimada en mapa:")
     st_folium(m, width=1200, height=500)
+
 
