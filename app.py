@@ -8,7 +8,7 @@ from streamlit_folium import st_folium
 from PIL import Image
 
 # ✅ Esta línea debe ir al principio (antes de cualquier comando Streamlit)
-st.set_page_config(page_title="Virosque TMS", page_icon="🚛", layout="wide")
+st.set_page_config(page_title="TMS", page_icon="🚛", layout="wide")
 
 # 🎨 Estilos personalizados
 st.markdown("""
