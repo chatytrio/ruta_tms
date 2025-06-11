@@ -7,10 +7,10 @@ import folium
 from streamlit_folium import st_folium
 from PIL import Image
 
-# ✅ Esta línea debe ir al principio (antes de cualquier comando Streamlit)
-st.set_page_config(page_title="TMS", page_icon="🚛", layout="wide")
+# Configuración de la página
+st.set_page_config(page_title="Virosque TMS", page_icon="🚛", layout="wide")
 
-# 🎨 Estilos personalizados
+# Estilo personalizado
 st.markdown("""
     <style>
         body {
@@ -31,11 +31,11 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 🔐 API Key OpenRouteService
+# API de OpenRouteService
 api_key = "5b3ce3597851110001cf6248e38c54a14f3b4a1b85d665c9694e9874"
 client = openrouteservice.Client(key=api_key)
 
-# 📍 Función para geocodificación
+# Geocodificación
 def geocode(direccion):
     url = "https://api.openrouteservice.org/geocode/search"
     params = {
@@ -53,13 +53,13 @@ def geocode(direccion):
     else:
         return None, None
 
-# 🖼️ Logo + título
+# Logo + título
 logo = Image.open("logo-virosque2-01.png")
 st.image(logo, width=250)
-st.markdown("<h1 style='color:#8D1B2D;'>TMS</h1>", unsafe_allow_html=True)
-st.markdown("### Planificador de rutas para camiones", unsafe_allow_html=True)
+st.markdown("<h1 style='color:#8D1B2D;'>Virosque TMS</h1>", unsafe_allow_html=True)
+st.markdown("### La excelencia es el camino — planificador de rutas para camiones", unsafe_allow_html=True)
 
-# 📥 Entradas del usuario
+# Entradas principales
 col1, col2, col3 = st.columns(3)
 with col1:
     origen = st.text_input("📍 Origen", value="Valencia, España")
@@ -68,22 +68,36 @@ with col2:
 with col3:
     hora_salida_str = st.time_input("🕒 Hora de salida", value=datetime.strptime("08:00", "%H:%M")).strftime("%H:%M")
 
-# ▶️ Botón para ejecutar
+# Campo para paradas
+stops = st.text_area("➕ Paradas intermedias (una por línea)", placeholder="Ej: Albacete, España\nCuenca, España")
+
+# Botón de cálculo
 if st.button("🔍 Calcular Ruta"):
     st.session_state["calcular"] = True
 
-# ✅ Lógica principal
+# Lógica principal
 if st.session_state.get("calcular"):
     coord_origen, label_origen = geocode(origen)
     coord_destino, label_destino = geocode(destino)
 
+    stops_list = []
+    if stops.strip():
+        for parada in stops.strip().split("\n"):
+            coord, _ = geocode(parada)
+            if coord:
+                stops_list.append(coord)
+            else:
+                st.warning(f"❌ No se pudo geolocalizar: {parada}")
+
     if not coord_origen or not coord_destino:
-        st.error("❌ No se pudo geolocalizar una de las direcciones.")
+        st.error("❌ No se pudo geolocalizar el origen o destino.")
         st.stop()
+
+    coords_totales = [coord_origen] + stops_list + [coord_destino]
 
     try:
         ruta = client.directions(
-            coordinates=[coord_origen, coord_destino],
+            coordinates=coords_totales,
             profile='driving-hgv',
             format='geojson'
         )
@@ -99,8 +113,8 @@ if st.session_state.get("calcular"):
     hora_salida = datetime.strptime(hora_salida_str, "%H:%M")
     hora_llegada = hora_salida + timedelta(hours=tiempo_total_h)
 
-    # 📊 Métricas visuales
-    st.markdown("### 📊 Datos de la ruta", unsafe_allow_html=True)
+    # Mostrar métricas
+    st.markdown("### 📊 Datos de la ruta")
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("🛣 Distancia", f"{distancia_km:.2f} km")
     col2.metric("🕓 Conducción", f"{duracion_horas:.2f} h")
@@ -112,11 +126,13 @@ if st.session_state.get("calcular"):
     else:
         st.success("🟢 El viaje puede completarse en una sola jornada de trabajo.")
 
-    # 🗺️ Mapa interactivo
+    # Mapa interactivo
     linea = ruta["features"][0]["geometry"]["coordinates"]
     linea_latlon = [[p[1], p[0]] for p in linea]
     m = folium.Map(location=linea_latlon[0], zoom_start=6)
     folium.Marker(location=[coord_origen[1], coord_origen[0]], tooltip="📍 Origen").add_to(m)
+    for idx, parada in enumerate(stops_list):
+        folium.Marker(location=[parada[1], parada[0]], tooltip=f"Parada {idx + 1}").add_to(m)
     folium.Marker(location=[coord_destino[1], coord_destino[0]], tooltip="🏁 Destino").add_to(m)
     folium.PolyLine(linea_latlon, color="blue", weight=5).add_to(m)
 
