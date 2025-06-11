@@ -3,11 +3,14 @@ import openrouteservice
 import requests
 import math
 from datetime import datetime, timedelta
+import folium
+from streamlit_folium import st_folium
 
-# API KEY de OpenRouteService
+# API Key personal
 api_key = "5b3ce3597851110001cf6248e38c54a14f3b4a1b85d665c9694e9874"
 client = openrouteservice.Client(key=api_key)
 
+# Función para geolocalizar direcciones
 def geocode(direccion):
     url = "https://api.openrouteservice.org/geocode/search"
     params = {
@@ -25,48 +28,67 @@ def geocode(direccion):
     else:
         return None, None
 
-st.title("🚛 Planificador de Ruta para Camiones")
-st.markdown("Calcula el tiempo total estimado (con descansos) y la hora de llegada según el Reglamento UE.")
+# Configuración inicial
+st.set_page_config(page_title="Virosque TMS", page_icon="🚛", layout="wide")
+st.markdown("## 🚛 Virosque | Planificador de Ruta para Camiones")
+st.markdown("Calcula distancias, tiempos de conducción y descansos obligatorios, con visualización en mapa.")
 
-origen = st.text_input("📍 Origen", value="Valencia, España")
-destino = st.text_input("📍 Destino", value="Madrid, España")
-hora_salida_str = st.time_input("🕒 Hora de salida", value=datetime.strptime("08:00", "%H:%M")).strftime("%H:%M")
+# Entradas del usuario
+col1, col2, col3 = st.columns(3)
+with col1:
+    origen = st.text_input("📍 Origen", value="Valencia, España")
+with col2:
+    destino = st.text_input("🏁 Destino", value="Madrid, España")
+with col3:
+    hora_salida_str = st.time_input("🕒 Hora de salida", value=datetime.strptime("08:00", "%H:%M")).strftime("%H:%M")
 
-if st.button("Calcular Ruta"):
+# Botón de cálculo
+if st.button("🔍 Calcular Ruta"):
     coord_origen, label_origen = geocode(origen)
     coord_destino, label_destino = geocode(destino)
 
     if not coord_origen or not coord_destino:
-        st.error("No se pudo geolocalizar una de las direcciones.")
+        st.error("❌ No se pudo geolocalizar una de las direcciones.")
+        st.stop()
+
+    try:
+        ruta = client.directions(
+            coordinates=[coord_origen, coord_destino],
+            profile='driving-hgv',
+            format='geojson'
+        )
+    except openrouteservice.exceptions.ApiError as e:
+        st.error(f"❌ Error al calcular la ruta: {e}")
+        st.stop()
+
+    segmento = ruta['features'][0]['properties']['segments'][0]
+    distancia_km = segmento['distance'] / 1000
+    duracion_horas = segmento['duration'] / 3600
+    descansos = math.floor(duracion_horas / 4.5)
+    tiempo_total_h = duracion_horas + descansos * 0.75
+    hora_salida = datetime.strptime(hora_salida_str, "%H:%M")
+    hora_llegada = hora_salida + timedelta(hours=tiempo_total_h)
+
+    # Mostrar resultados
+    st.success("✅ Ruta calculada correctamente")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("🛣 Distancia", f"{distancia_km:.2f} km")
+    col2.metric("🕓 Conducción", f"{duracion_horas:.2f} h")
+    col3.metric("⏱ Total (con descansos)", f"{tiempo_total_h:.2f} h")
+
+    st.markdown(f"📅 **Hora estimada de llegada:** `{hora_llegada.strftime('%H:%M')}`")
+    if tiempo_total_h > 13:
+        st.warning("⚠️ Este viaje excede el límite de jornada diaria (13h). Requiere descanso adicional.")
     else:
-        try:
-            ruta = client.directions(
-                coordinates=[coord_origen, coord_destino],
-                profile='driving-hgv',
-                format='geojson'
-            )
-        except openrouteservice.exceptions.ApiError as e:
-            st.error(f"❌ Error al calcular la ruta: {e}")
-            st.stop()
+        st.success("🟢 El viaje puede completarse en una sola jornada de trabajo.")
 
-        segmento = ruta['features'][0]['properties']['segments'][0]
-        distancia_km = segmento['distance'] / 1000
-        duracion_horas = segmento['duration'] / 3600
-        descansos = math.floor(duracion_horas / 4.5)
-        tiempo_total_h = duracion_horas + descansos * 0.75
-        hora_salida = datetime.strptime(hora_salida_str, "%H:%M")
-        hora_llegada = hora_salida + timedelta(hours=tiempo_total_h)
+    # Crear y mostrar mapa
+    linea = ruta["features"][0]["geometry"]["coordinates"]
+    linea_latlon = [[p[1], p[0]] for p in linea]
+    m = folium.Map(location=linea_latlon[0], zoom_start=6)
+    folium.Marker(location=[coord_origen[1], coord_origen[0]], tooltip="📍 Origen").add_to(m)
+    folium.Marker(location=[coord_destino[1], coord_destino[0]], tooltip="🏁 Destino").add_to(m)
+    folium.PolyLine(linea_latlon, color="blue", weight=5).add_to(m)
 
-        st.success("✅ Ruta calculada correctamente")
-        st.markdown(f"**Origen:** {label_origen}")
-        st.markdown(f"**Destino:** {label_destino}")
-        st.markdown(f"**Distancia estimada:** {distancia_km:.2f} km")
-        st.markdown(f"**Tiempo de conducción:** {duracion_horas:.2f} h")
-        st.markdown(f"**Descansos obligatorios:** {descansos} x 45 min")
-        st.markdown(f"**Tiempo total (con descansos):** {tiempo_total_h:.2f} h")
-        st.markdown(f"**Hora estimada de llegada:** {hora_llegada.strftime('%H:%M')}")
-
-        if tiempo_total_h > 13:
-            st.warning("⚠️ Este viaje excede el límite de jornada diaria (13h). Requiere planificación con descanso diario.")
-        else:
-            st.success("🟢 El viaje puede completarse en una sola jornada de trabajo.")
+    st.markdown("### 🗺️ Ruta estimada en mapa:")
+    st_data = st_folium(m, width=1200, height=500)
