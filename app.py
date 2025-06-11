@@ -28,12 +28,12 @@ def geocode(direccion):
     else:
         return None, None
 
-# Configuración de la app
+# Configuración inicial
 st.set_page_config(page_title="Virosque TMS", page_icon="🚛", layout="wide")
 st.markdown("## 🚛 Virosque | Planificador de Ruta para Camiones")
 st.markdown("Calcula distancias, tiempos de conducción y descansos obligatorios, con visualización en mapa.")
 
-# Entradas
+# Entradas del usuario
 col1, col2, col3 = st.columns(3)
 with col1:
     origen = st.text_input("📍 Origen", value="Valencia, España")
@@ -42,11 +42,10 @@ with col2:
 with col3:
     hora_salida_str = st.time_input("🕒 Hora de salida", value=datetime.strptime("08:00", "%H:%M")).strftime("%H:%M")
 
-# Botón de cálculo y persistencia
+# Botón y control de estado
 if st.button("🔍 Calcular Ruta"):
     st.session_state["calcular"] = True
 
-# Cálculo si se activó el botón
 if st.session_state.get("calcular"):
     coord_origen, label_origen = geocode(origen)
     coord_destino, label_destino = geocode(destino)
@@ -65,7 +64,6 @@ if st.session_state.get("calcular"):
         st.error(f"❌ Error al calcular la ruta: {e}")
         st.stop()
 
-    # Cálculos
     segmento = ruta['features'][0]['properties']['segments'][0]
     distancia_km = segmento['distance'] / 1000
     duracion_horas = segmento['duration'] / 3600
@@ -74,26 +72,27 @@ if st.session_state.get("calcular"):
     hora_salida = datetime.strptime(hora_salida_str, "%H:%M")
     hora_llegada = hora_salida + timedelta(hours=tiempo_total_h)
 
-    # Resultados
-    st.success("✅ Ruta calculada correctamente")
-    col1, col2, col3 = st.columns(3)
+    # Métricas principales alineadas
+    col1, col2, col3, col4 = st.columns(4)
     col1.metric("🛣 Distancia", f"{distancia_km:.2f} km")
     col2.metric("🕓 Conducción", f"{duracion_horas:.2f} h")
     col3.metric("⏱ Total (con descansos)", f"{tiempo_total_h:.2f} h")
-    st.markdown(f"📅 **Hora estimada de llegada:** `{hora_llegada.strftime('%H:%M')}`")
+    col4.metric("📅 Llegada estimada", hora_llegada.strftime("%H:%M"))
 
+    # Validación de jornada
     if tiempo_total_h > 13:
-        st.warning("⚠️ Excede la jornada diaria de 13h")
+        st.warning("⚠️ Este viaje excede el límite de jornada diaria (13h). Requiere descanso adicional.")
     else:
-        st.success("🟢 Jornada dentro del límite")
+        st.success("🟢 El viaje puede completarse en una sola jornada de trabajo.")
 
-    # Mapa interactivo
+    # Mapa de ruta
     linea = ruta["features"][0]["geometry"]["coordinates"]
     linea_latlon = [[p[1], p[0]] for p in linea]
     m = folium.Map(location=linea_latlon[0], zoom_start=6)
     folium.Marker(location=[coord_origen[1], coord_origen[0]], tooltip="📍 Origen").add_to(m)
     folium.Marker(location=[coord_destino[1], coord_destino[0]], tooltip="🏁 Destino").add_to(m)
     folium.PolyLine(linea_latlon, color="blue", weight=5).add_to(m)
+
     st.markdown("### 🗺️ Ruta estimada en mapa:")
     st_folium(m, width=1200, height=500)
 
