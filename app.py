@@ -57,7 +57,7 @@ def geocode(direccion):
 logo = Image.open("logo-virosque2-01.png")
 st.image(logo, width=250)
 st.markdown("<h1 style='color:#8D1B2D;'>TMS</h1>", unsafe_allow_html=True)
-st.markdown("### La excelencia es el camino — planificador de rutas para camiones", unsafe_allow_html=True)
+st.markdown("### Planificador de rutas para camiones", unsafe_allow_html=True)
 
 # 📥 Entradas del usuario
 col1, col2, col3 = st.columns(3)
