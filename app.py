@@ -5,12 +5,34 @@ import math
 from datetime import datetime, timedelta
 import folium
 from streamlit_folium import st_folium
+from PIL import Image
+
+# Estilos personalizados (color corporativo y fondo gris)
+st.markdown("""
+    <style>
+        body {
+            background-color: #f5f5f5;
+        }
+        .stButton>button {
+            background-color: #8D1B2D;
+            color: white;
+            border-radius: 6px;
+            padding: 0.6em 1em;
+            border: none;
+            font-weight: bold;
+        }
+        .stButton>button:hover {
+            background-color: #a7283d;
+            color: white;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 # API Key
 api_key = "5b3ce3597851110001cf6248e38c54a14f3b4a1b85d665c9694e9874"
 client = openrouteservice.Client(key=api_key)
 
-# Geocodificación
+# Función para geolocalizar direcciones
 def geocode(direccion):
     url = "https://api.openrouteservice.org/geocode/search"
     params = {
@@ -28,12 +50,16 @@ def geocode(direccion):
     else:
         return None, None
 
-# Configuración inicial
+# Configuración general
 st.set_page_config(page_title="Virosque TMS", page_icon="🚛", layout="wide")
-st.markdown("## 🚛 Virosque | Planificador de Ruta para Camiones")
-st.markdown("Calcula distancias, tiempos de conducción y descansos obligatorios, con visualización en mapa.")
 
-# Entradas del usuario
+# Logo y título
+logo = Image.open("logo-virosque2-01.png")
+st.image(logo, width=250)
+st.markdown("<h1 style='color:#8D1B2D;'>Virosque TMS</h1>", unsafe_allow_html=True)
+st.markdown("### La excelencia es el camino — planificador de rutas para camiones", unsafe_allow_html=True)
+
+# Entradas
 col1, col2, col3 = st.columns(3)
 with col1:
     origen = st.text_input("📍 Origen", value="Valencia, España")
@@ -42,10 +68,11 @@ with col2:
 with col3:
     hora_salida_str = st.time_input("🕒 Hora de salida", value=datetime.strptime("08:00", "%H:%M")).strftime("%H:%M")
 
-# Botón y control de estado
+# Botón de cálculo
 if st.button("🔍 Calcular Ruta"):
     st.session_state["calcular"] = True
 
+# Si se ha pulsado el botón, procesamos
 if st.session_state.get("calcular"):
     coord_origen, label_origen = geocode(origen)
     coord_destino, label_destino = geocode(destino)
@@ -72,20 +99,20 @@ if st.session_state.get("calcular"):
     hora_salida = datetime.strptime(hora_salida_str, "%H:%M")
     hora_llegada = hora_salida + timedelta(hours=tiempo_total_h)
 
-    # Métricas principales alineadas
+    # Métricas
+    st.markdown("### 📊 Datos de la ruta", unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("🛣 Distancia", f"{distancia_km:.2f} km")
     col2.metric("🕓 Conducción", f"{duracion_horas:.2f} h")
     col3.metric("⏱ Total (con descansos)", f"{tiempo_total_h:.2f} h")
     col4.metric("📅 Llegada estimada", hora_llegada.strftime("%H:%M"))
 
-    # Validación de jornada
     if tiempo_total_h > 13:
         st.warning("⚠️ Este viaje excede el límite de jornada diaria (13h). Requiere descanso adicional.")
     else:
         st.success("🟢 El viaje puede completarse en una sola jornada de trabajo.")
 
-    # Mapa de ruta
+    # Mapa
     linea = ruta["features"][0]["geometry"]["coordinates"]
     linea_latlon = [[p[1], p[0]] for p in linea]
     m = folium.Map(location=linea_latlon[0], zoom_start=6)
@@ -95,4 +122,3 @@ if st.session_state.get("calcular"):
 
     st.markdown("### 🗺️ Ruta estimada en mapa:")
     st_folium(m, width=1200, height=500)
-
