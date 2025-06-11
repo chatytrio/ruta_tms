@@ -53,13 +53,13 @@ def geocode(direccion):
     else:
         return None, None
 
-# Logo + título
+# Logo y encabezado
 logo = Image.open("logo-virosque2-01.png")
 st.image(logo, width=250)
 st.markdown("<h1 style='color:#8D1B2D;'>Virosque TMS</h1>", unsafe_allow_html=True)
 st.markdown("### La excelencia es el camino — planificador de rutas para camiones", unsafe_allow_html=True)
 
-# Entradas principales
+# Entradas del usuario
 col1, col2, col3 = st.columns(3)
 with col1:
     origen = st.text_input("📍 Origen", value="Valencia, España")
@@ -68,14 +68,14 @@ with col2:
 with col3:
     hora_salida_str = st.time_input("🕒 Hora de salida", value=datetime.strptime("08:00", "%H:%M")).strftime("%H:%M")
 
-# Campo para paradas
+# Paradas intermedias
 stops = st.text_area("➕ Paradas intermedias (una por línea)", placeholder="Ej: Albacete, España\nCuenca, España")
 
-# Botón de cálculo
+# Botón de acción
 if st.button("🔍 Calcular Ruta"):
     st.session_state["calcular"] = True
 
-# Lógica principal
+# Cálculo principal
 if st.session_state.get("calcular"):
     coord_origen, label_origen = geocode(origen)
     coord_destino, label_destino = geocode(destino)
@@ -105,9 +105,13 @@ if st.session_state.get("calcular"):
         st.error(f"❌ Error al calcular la ruta: {e}")
         st.stop()
 
-    segmento = ruta['features'][0]['properties']['segments'][0]
-    distancia_km = segmento['distance'] / 1000
-    duracion_horas = segmento['duration'] / 3600
+    # ✅ CORRECCIÓN: sumar todos los segmentos
+    segmentos = ruta['features'][0]['properties']['segments']
+    distancia_total = sum(seg["distance"] for seg in segmentos)
+    duracion_total = sum(seg["duration"] for seg in segmentos)
+
+    distancia_km = distancia_total / 1000
+    duracion_horas = duracion_total / 3600
     descansos = math.floor(duracion_horas / 4.5)
     tiempo_total_h = duracion_horas + descansos * 0.75
     hora_salida = datetime.strptime(hora_salida_str, "%H:%M")
@@ -138,5 +142,4 @@ if st.session_state.get("calcular"):
 
     st.markdown("### 🗺️ Ruta estimada en mapa:")
     st_folium(m, width=1200, height=500)
-
 
